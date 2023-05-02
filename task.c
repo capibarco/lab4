@@ -5,7 +5,41 @@
 #include <math.h>
 #include <time.h>
 #include <cublas_v2.h>
+#include <cub/cub.cuh>
+__global__ void fill(double* matrixOld, double* matrixNew, int size)
+{
+	double fraction = 10.0 / (size - 1);
+	matrixOld[i] = 10 + i * fraction;
+	matrixOld[i * size] = 10 + i * fraction;
+	matrixOld[size * i + size - 1] = 20 + i * fraction;
+	matrixOld[size * (size - 1) + i] = 20 + i * fraction;
 
+	matrixNew[i] = matrixOld[i];
+	matrixNew[i * size] = matrixOld[i * size];
+	matrixNew[size * i + size - 1] = matrixOld[size * i + size - 1];
+	matrixNew[size * (size - 1) + i] = matrixOld[size * (size - 1) + i];
+}
+__global__ void calc(double* matrixOld, double* matrixNew, int size) 
+{
+    size_t i = blockIdx.x;
+	size_t j = threadIdx.x;
+
+	if (!(blockIdx.x == 0 || threadIdx.x == 0))
+	matrixNew[i * size + j] = 0.25 * (
+					matrixOld[i * size + j - 1] +
+					matrixOld[(i - 1) * size + j] +
+					matrixOld[(i + 1) * size + j] +
+					matrixOld[i * size + j + 1]);
+}
+__global__ void findError((double* matrixOld, double* matrixNew, double* matrixTmp)
+{
+	size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if(idx>0)
+	{
+		matrixTmp[idx] = matrixNew[idx] - matrixOld[idx];
+	}
+}
 int main(int argc, char** argv)
 {
 	cublasStatus_t stat;
