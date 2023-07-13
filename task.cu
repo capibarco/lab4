@@ -69,9 +69,9 @@ for (int i = 0; i < size; i++)
     cudaMalloc((void **)&matrixNewD, sizeof(double)*totalSize);
     cudaMalloc((void **)&matrixTmpD, sizeof(double)*totalSize);
 
-	cudaMemcpy(matrixOldD, matrixOld, sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(matrixNewD, matrixNew, sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(matrixTmpD, matrixTmp, sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(matrixOldD, matrixOld, sizeof(double)*totalSize, cudaMemcpyHostToDevice);
+    cudaMemcpy(matrixNewD, matrixNew, sizeof(double)*totalSize, cudaMemcpyHostToDevice);
+    cudaMemcpy(matrixTmpD, matrixTmp, sizeof(double)*totalSize, cudaMemcpyHostToDevice);
 
 
 	  int blockSize =32;
