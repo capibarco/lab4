@@ -110,11 +110,11 @@ if (toPrint)
 	clock_t begin = clock();
 while (errorNow > maxError && iterNow < maxIteration)
 {
-calc<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, size);
+calc<<<size-1, size-1>>>(matrixOldD, matrixNewD, size);
 
 		if (iterNow % 100 == 0)
 {
-			findError<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, matrixTmpD, size);
+			findError<<<size-1, size-1>>>(matrixOldD, matrixNewD, matrixTmpD, size);
 
 			 cub::DeviceReduce::Max(store, tempsize, matrixTmpD, max_error, totalSize);
         cudaMemcpy(&errorNow, max_error, sizeof(double), cudaMemcpyDeviceToHost);
