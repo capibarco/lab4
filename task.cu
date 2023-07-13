@@ -61,29 +61,31 @@ for (int i = 0; i < size; i++)
 		matrixNew[size * (size - 1) + i] = matrixOld[size * (size - 1) + i];
 	}
 
-    double* matrixOldD;
-    double* matrixNewD;
-    double* matrixTmpD;
+    double* matrixOldD = 0;
+    double* matrixNewD = 0;
+    double* matrixTmpD = 0;
+    double* max_error =0;
+    double* store = 0;
 
 	cudaMalloc((void **)&matrixOldD, sizeof(double)*totalSize);
     cudaMalloc((void **)&matrixNewD, sizeof(double)*totalSize);
     cudaMalloc((void **)&matrixTmpD, sizeof(double)*totalSize);
+cudaMalloc((void **)&max_error, sizeof(double));
+    size_t tempsize  = 0;
+cub::DeviceReduce::Max(store, tempsize, matrixTmpD, max_error, totalSize);
+	cudaMalloc((void**)&store, tempsize);
+
 
 	cudaMemcpy(matrixOldD, matrixOld, sizeof(double)*totalSize, cudaMemcpyHostToDevice);
     cudaMemcpy(matrixNewD, matrixNew, sizeof(double)*totalSize, cudaMemcpyHostToDevice);
-    cudaMemcpy(matrixTmpD, matrixTmp, sizeof(double)*totalSize, cudaMemcpyHostToDevice);
 
 
 	  int blockSize =32;
 	 int gridSize = (size + 31) / 32;
 
 
-    double* max_error, *store=0;
-    cudaMalloc(&max_error, sizeof(double));
 
-    size_t tempsize  = 0;
-    cub::DeviceReduce::Max(store, tempsize, matrixTmpD, max_error, totalSize);
-	cudaMalloc((void**)&store, tempsize);
+    
 
 
 
@@ -94,10 +96,9 @@ for (int i = 0; i < size; i++)
 	int result = 0;
 	const double minus = -1;
 
-	clock_t begin = clock();
+
 if (toPrint)
 	{
-		#pragma acc kernels loop seq
 		for (int i = 0; i < size; i++)
 		{
 			for (int j = 0; j < size; j++)
@@ -106,20 +107,24 @@ if (toPrint)
 		}
 		printf("\n");
 	}
+	clock_t begin = clock();
 while (errorNow > maxError && iterNow < maxIteration)
 {
 calc<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, size);
-iterNow++;
-		if (iterNow % 100 == 0){
+
+		if (iterNow % 100 == 0)
+{
 			findError<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, matrixTmpD, size);
 
 			 cub::DeviceReduce::Max(store, tempsize, matrixTmpD, max_error, totalSize);
         cudaMemcpy(&errorNow, max_error, sizeof(double), cudaMemcpyDeviceToHost);
 		}
-
-		double* t = matrixOldD;
+double* t = matrixOldD;
 		matrixOldD = matrixNewD;
 		matrixNewD = t;
+
+		
+iterNow++;
 
 		
 }
