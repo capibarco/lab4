@@ -83,12 +83,12 @@ int main(int argc, char** argv)
 
 
 
-    double* max_error, store=0;
+    double* max_error, *store=0;
     cudaMalloc(&max_error, sizeof(double));
 
     size_t tempsize  = 0;
     cub::DeviceReduce::Max(store, tempsize, matrixTmpD, max_error, totalSize);
-	cudaMalloc(&store, tempsize);
+	cudaMalloc((void**)&store, tempsize);
 
 
 
