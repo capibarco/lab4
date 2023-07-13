@@ -8,7 +8,10 @@
 #include <cub/cub.cuh>
 __global__ void fill(double* matrixOld, double* matrixNew, int size)
 {
+	size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+	
 	double fraction = 10.0 / (size - 1);
+	
 	matrixOld[i] = 10 + i * fraction;
 	matrixOld[i * size] = 10 + i * fraction;
 	matrixOld[size * i + size - 1] = 20 + i * fraction;
@@ -24,7 +27,7 @@ __global__ void calc(double* matrixOld, double* matrixNew, int size)
     size_t i = blockIdx.x;
 	size_t j = threadIdx.x;
 
-	if (!(blockIdx.x == 0 || threadIdx.x == 0))
+	if((i > 0 && i < n-1) && (j > 0 && j < n-1))
 	matrixNew[i * size + j] = 0.25 * (
 					matrixOld[i * size + j - 1] +
 					matrixOld[(i - 1) * size + j] +
@@ -33,19 +36,14 @@ __global__ void calc(double* matrixOld, double* matrixNew, int size)
 }
 __global__ void findError((double* matrixOld, double* matrixNew, double* matrixTmp)
 {
-	size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-	if (!(blockIdx.x == 0 || threadIdx.x == 0))
+	if((i > 0 && i < n-1) && (j > 0 && j < n-1))
 	{
+		size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
 		matrixTmp[idx] = matrixNew[idx] - matrixOld[idx];
 	}
 }
 int main(int argc, char** argv)
 {
-	cublasStatus_t stat;
-	cublasHandle_t handle;
-	cublasCreate(&handle);
-
 	int cornerUL = 10;
 	int cornerUR = 20;
 	int cornerBR = 30;
@@ -63,6 +61,38 @@ int main(int argc, char** argv)
 	double* matrixNew = (double*)calloc(totalSize, sizeof(double));
 	double* matrixTmp = (double*)calloc(totalSize, sizeof(double));
 	
+    double* matrixOldD;
+    double* matrixNewD;
+    double* matrixTmpD;
+	cudaMalloc((void **)&matrixOldD, sizeof(double)*totalSize);
+    cudaMalloc((void **)&matrixNewD, sizeof(double)*totalSize);
+    cudaMalloc((void **)&matrixTmpD, sizeof(double)*totalSize);
+	
+	cudaMemcpy(matrixOldD, matrixOld, sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(matrixNewD, matrixNew, sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(matrixTmpD, matrixTmp, sizeof(double), cudaMemcpyHostToDevice);
+
+
+	 int blockS, minGridSize = 128;
+	 int maxSize = size; 
+	 cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockS, calc, 0, totalSize);
+	 dim3 blockSize(blockS, 1);
+	 dim3 gridSize((size-1)/blockSize.x + 1, (size-1)/blockSize.y + 1);
+	
+	
+ 
+    double* max_error, store=0;
+    cudaMalloc(&max_error, sizeof(double));
+
+    size_t tempsize  = 0;
+    cub::DeviceReduce::Max(store, tempsize, matrixTmpD, max_error, totalSize);
+	cudaMalloc(&store, tempsize);
+	
+	cudaStream_t stream;
+    cudaStreamCreate(&stream);
+    cudaGraph_t graph;
+    cudaGraphExec_t instance;
+
 	const double fraction = 10.0 / (size - 1);
 	double errorNow = 1.0;
 	int iterNow = 0;
@@ -71,102 +101,33 @@ int main(int argc, char** argv)
 	const double minus = -1;
 	
 	clock_t begin = clock();
-	
-	#pragma acc enter data create(matrixOld[0:totalSize], matrixNew[0:totalSize], matrixTmp[0:totalSize])
-	#pragma acc parallel loop
-	for (int i = 0; i < size; i++)
-	{
-		matrixOld[i] = cornerUL + i * fraction;
-		matrixOld[i * size] = cornerUL + i * fraction;
-		matrixOld[size * i + size - 1] = cornerUR + i * fraction;
-		matrixOld[size * (size - 1) + i] = cornerUR + i * fraction;
-
-		matrixNew[i] = matrixOld[i];
-		matrixNew[i * size] = matrixOld[i * size];
-		matrixNew[size * i + size - 1] = matrixOld[size * i + size - 1];
-		matrixNew[size * (size - 1) + i] = matrixOld[size * (size - 1) + i];
-	}
-	if (toPrint)
-	{
-		#pragma acc kernels loop seq
-		for (int i = 0; i < size; i++)
-		{
-			for (int j = 0; j < size; j++)
-				printf("%lf\t",matrixOld[size * i + j]);
-			printf("\n");				  
-		}
-		printf("\n");
-	}
+	 fill<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, size);
+	cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal);
+	for(int i = 0; i<500;i+=2)
+    {
+        calc<<<gridSize, blockSize, 0, stream>>>(matrixNewD, matrixOldD, size);
+        calc<<<gridSize, blockSize, 0, stream>>>(matrixOldD, matrixNewD, size);
+    }
+    cudaStreamEndCapture(stream, &graph);
+    cudaGraphInstantiate(&instance, graph, NULL, NULL, 0);
 	while (errorNow > maxError && iterNow < maxIteration)
-	{
-		
-		#pragma acc parallel loop independent collapse(2) vector vector_length(size) gang num_gangs(size) present(matrixOld[0:totalSize], matrixNew[0:totalSize])
-		for (int i = 1; i < size - 1; i++)
-		{
-			for (int j = 1; j < size - 1; j++)
-			{
-				matrixNew[i * size + j] = 0.25 * (
-					matrixOld[i * size + j - 1] +
-					matrixOld[(i - 1) * size + j] +
-					matrixOld[(i + 1) * size + j] +
-					matrixOld[i * size + j + 1]);
-			}
-		}
-		if (iterNow % 100 == 0)
-		{
-			#pragma acc host_data use_device(matrixNew, matrixOld, matrixTmp)
-			{
-				stat = cublasDcopy(handle, totalSize, matrixNew, 1, matrixTmp, 1);
-				if (stat != CUBLAS_STATUS_SUCCESS)
-				{
-					printf("cublasDcopy error\n");
-					cublasDestroy(handle);
-					return EXIT_FAILURE;
-				}
+	{        
+        iterNow+=500;
+        cudaGraphLaunch(instance, stream);
+        findError<<<GRID_SIZE, BLOCK_SIZE, 0, stream>>>(vec_d, new_vec_d, tmp_d, n);
+	    cub::DeviceReduce::Max(store, bytes, tmp_d, max_errorx, n*n);
+        cudaMemcpy(&errorNow, max_error, sizeof(double), cudaMemcpyDeviceToHost);
 
-				stat = cublasDaxpy(handle, totalSize, &minus, matrixOld, 1, matrixTmp, 1);
-				if (stat != CUBLAS_STATUS_SUCCESS)
-				{
-					printf("cublasDaxpy error\n");
-					cublasDestroy(handle);
-					return EXIT_FAILURE;
-				}
+    }
 
-				stat = cublasIdamax(handle, totalSize, matrixTmp, 1, &result);
-				if (stat != CUBLAS_STATUS_SUCCESS)
-				{
-					printf("cublasIdamax error\n");
-					cublasDestroy(handle);
-					return EXIT_FAILURE;
-				}			
-			}
-			#pragma acc update self(matrixTmp[result-1])
-			errorNow = matrixTmp[result-1];	
-		}
-
-		double* temp = matrixOld;
-		matrixOld = matrixNew;
-		matrixNew = temp;
-		
-		iterNow++;	
-	}
-	if (toPrint)
-	{
-		#pragma acc kernels loop seq
-		for (int i = 0; i < size; i++)
-		{
-			for (int j = 0; j < size; j++)
-				printf("%lf\t",matrixOld[size * i + j]);
-			printf("\n");				  
-		}
-		printf("\n");
-	}
-	#pragma acc exit data delete(matrixOld[0:totalSize], matrixNew[0:totalSize], matrixTmp[0:totalSize])
 	clock_t end = clock();
-	cublasDestroy(handle);
+	  cudaDeviceSynchronize();
 	free(matrixOld);
 	free(matrixNew);
 	free(matrixTmp);
+	cudaFree(matrixOldD);
+	cudaFree(matrixNewD);
+	cudaFree(matrixTmpD);
 	printf("iterations = %d, error = %lf, time = %lf\n", iterNow, errorNow, (double)(end - begin) / CLOCKS_PER_SEC);
 
 	return 0;
