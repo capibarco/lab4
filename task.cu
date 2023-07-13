@@ -104,7 +104,7 @@ int main(int argc, char** argv)
 while (errorNow > maxError && iterNow < maxIteration)
 {
 calc<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, size);
-
+iterNow++;
 		if (iterNow % 100 == 0){
 			findError<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, matrixTmpD, size);
 
@@ -116,7 +116,7 @@ calc<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, size);
 		matrixOldD = matrixNewD;
 		matrixNewD = t;
 
-		iterNow++;
+		
 }
 	clock_t end = clock();
 	free(matrixOld);
