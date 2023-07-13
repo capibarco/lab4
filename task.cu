@@ -4,6 +4,7 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#include <cuda_runtime.h>
 #include <cub/cub.cuh>
 __global__ void fill(double* matrixOld, double* matrixNew, int size)
 {
