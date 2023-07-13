@@ -99,10 +99,10 @@ int main(int argc, char** argv)
 
 
     int blockS, minGridSize = 128;
-    int maxSize = size;
-    cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockS, calc, 0, totalSize);
-    dim3 blockSize = dim3(32, 32);
-    dim3 gridSize  = dim3((size + 31) / 32, (size + 31) / 32);
+	 int maxSize = size; 
+	 cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockS, calc, 0, size);
+	 dim3 blockSize(blockS, 1);
+	 dim3 gridSize((size-1)/blockSize.x + 1, (size-1)/blockSize.y + 1);
 
     double errorNow = 1.0;
     int iterNow = 0;
