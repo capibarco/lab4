@@ -100,7 +100,18 @@ int main(int argc, char** argv)
 
 	clock_t begin = clock();
 	 fill<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, size);
-
+cudaMemcpy(matrixOldD, matrixOld, sizeof(double), cudaMemcpyDeviceToHost);
+if (toPrint)
+	{
+		#pragma acc kernels loop seq
+		for (int i = 0; i < size; i++)
+		{
+			for (int j = 0; j < size; j++)
+				printf("%lf\t",matrixOld[size * i + j]);
+			printf("\n");				  
+		}
+		printf("\n");
+	}
 while (errorNow > maxError && iterNow < maxIteration)
 {
 calc<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, size);
