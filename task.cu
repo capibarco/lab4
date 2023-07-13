@@ -80,8 +80,11 @@ cub::DeviceReduce::Max(store, tempsize, matrixTmpD, max_error, totalSize);
     cudaMemcpy(matrixNewD, matrixNew, sizeof(double)*totalSize, cudaMemcpyHostToDevice);
 
 
-	  int blockSize =32;
-	 int gridSize = (size + 31) / 32;
+	   int blockS, minGridSize = 128;
+	 int maxSize = size; 
+	 cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockS, heat_equation, 0, maxSize);
+	 dim3 blockSize(blockS, 1);
+	 dim3 gridSize((size-1)/blockSize.x + 1, (size-1)/blockSize.y + 1);
 
 
 
@@ -110,11 +113,11 @@ if (toPrint)
 	clock_t begin = clock();
 while (errorNow > maxError && iterNow < maxIteration)
 {
-calc<<<size-1, size-1>>>(matrixOldD, matrixNewD, size);
+calc<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, size);
 
 		if (iterNow % 100 == 0)
 {
-			findError<<<size-1, size-1>>>(matrixOldD, matrixNewD, matrixTmpD, size);
+			findError<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, matrixTmpD, size);
 
 			 cub::DeviceReduce::Max(store, tempsize, matrixTmpD, max_error, totalSize);
         cudaMemcpy(&errorNow, max_error, sizeof(double), cudaMemcpyDeviceToHost);
