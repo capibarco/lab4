@@ -118,7 +118,6 @@ calc<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, size);
 		iterNow++;
 }
 	clock_t end = clock();
-	  cudaDeviceSynchronize();
 	free(matrixOld);
 	free(matrixNew);
 	free(matrixTmp);
