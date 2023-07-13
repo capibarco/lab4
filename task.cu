@@ -9,9 +9,9 @@
 __global__ void fill(double* matrixOld, double* matrixNew, int size)
 {
 	size_t i = blockIdx.x * blockDim.x + threadIdx.x;
-	
+
 	double fraction = 10.0 / (size - 1);
-	
+
 	matrixOld[i] = 10 + i * fraction;
 	matrixOld[i * size] = 10 + i * fraction;
 	matrixOld[size * i + size - 1] = 20 + i * fraction;
@@ -22,23 +22,25 @@ __global__ void fill(double* matrixOld, double* matrixNew, int size)
 	matrixNew[size * i + size - 1] = matrixOld[size * i + size - 1];
 	matrixNew[size * (size - 1) + i] = matrixOld[size * (size - 1) + i];
 }
-__global__ void calc(double* matrixOld, double* matrixNew, int n) 
+__global__ void calc(double* matrixOld, double* matrixNew, int n)
 {
     size_t i = blockIdx.x;
 	size_t j = threadIdx.x;
 
 	if((i > 0 && i < n-1) && (j > 0 && j < n-1))
-	matrixNew[i * size + j] = 0.25 * (
-					matrixOld[i * size + j - 1] +
-					matrixOld[(i - 1) * size + j] +
-					matrixOld[(i + 1) * size + j] +
-					matrixOld[i * size + j + 1]);
+	matrixNew[i * n + j] = 0.25 * (
+					matrixOld[i * n + j - 1] +
+					matrixOld[(i - 1) * n + j] +
+					matrixOld[(i + 1) * n + j] +
+					matrixOld[i * n + j + 1]);
 }
-__global__ void findError((double* matrixOld, double* matrixNew, double* matrixTmp, size_t n)
+__global__ void findError(double* matrixOld, double* matrixNew, double* matrixTmp, size_t n)
 {
+    size_t i = blockIdx.x;
+    size_t j = threadIdx.x;
 	if((i > 0 && i < n-1) && (j > 0 && j < n-1))
 	{
-		size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+		size_t idx = i * blockDim.x + j;
 		matrixTmp[idx] = matrixNew[idx] - matrixOld[idx];
 	}
 }
@@ -60,60 +62,60 @@ int main(int argc, char** argv)
 	double* matrixOld = (double*)calloc(totalSize, sizeof(double));
 	double* matrixNew = (double*)calloc(totalSize, sizeof(double));
 	double* matrixTmp = (double*)calloc(totalSize, sizeof(double));
-	
+
     double* matrixOldD;
     double* matrixNewD;
     double* matrixTmpD;
 	cudaMalloc((void **)&matrixOldD, sizeof(double)*totalSize);
     cudaMalloc((void **)&matrixNewD, sizeof(double)*totalSize);
     cudaMalloc((void **)&matrixTmpD, sizeof(double)*totalSize);
-	
+
 	cudaMemcpy(matrixOldD, matrixOld, sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(matrixNewD, matrixNew, sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(matrixTmpD, matrixTmp, sizeof(double), cudaMemcpyHostToDevice);
 
 
 	 int blockS, minGridSize = 128;
-	 int maxSize = size; 
+	 int maxSize = size;
 	 cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockS, calc, 0, totalSize);
 	 dim3 blockSize(blockS, 1);
 	 dim3 gridSize((size-1)/blockSize.x + 1, (size-1)/blockSize.y + 1);
-	
-	
- 
+
+
+
     double* max_error, store=0;
     cudaMalloc(&max_error, sizeof(double));
 
     size_t tempsize  = 0;
     cub::DeviceReduce::Max(store, tempsize, matrixTmpD, max_error, totalSize);
 	cudaMalloc(&store, tempsize);
-	
+
 
 
 	const double fraction = 10.0 / (size - 1);
 	double errorNow = 1.0;
 	int iterNow = 0;
-	
+
 	int result = 0;
 	const double minus = -1;
-	
+
 	clock_t begin = clock();
 	 fill<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, size);
 
 while (errorNow > maxError && iterNow < maxIteration)
 {
 calc<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, size);
-		
-		if (iterNow % 100 == 0){	
+
+		if (iterNow % 100 == 0){
 			findError<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, matrixTmpD, size);
-	 		
+
 			 cub::DeviceReduce::Max(store, tempsize, matrixTmpD, max_error, totalSize);
         cudaMemcpy(&errorNow, max_error, sizeof(double), cudaMemcpyDeviceToHost);
 		}
 
 		double* t = matrixOldD;
 		matrixOldD = matrixNewD;
-		matrixNewD = c;
+		matrixNewD = t;
 
 		iterNow++;
 }
