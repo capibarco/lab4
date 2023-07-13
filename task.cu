@@ -84,7 +84,7 @@ cub::DeviceReduce::Max(store, tempsize, matrixTmpD, max_error, totalSize);
 	 int maxSize = size; 
 	 cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockS, calc, 0, totalSize);
 	 dim3 blockSize(blockS, 1);
-	 dim3 gridSize((size-1)/blockSize.x + 1, (size-1)/blockSize.y + 1);
+	 dim3 gridSize((size-1)/blockS + 1, 1);
 
 
 
