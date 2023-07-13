@@ -35,7 +35,7 @@ __global__ void findError((double* matrixOld, double* matrixNew, double* matrixT
 {
 	size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-	if(idx>0)
+	if (!(blockIdx.x == 0 || threadIdx.x == 0))
 	{
 		matrixTmp[idx] = matrixNew[idx] - matrixOld[idx];
 	}
