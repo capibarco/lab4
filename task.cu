@@ -22,7 +22,7 @@ __global__ void fill(double* matrixOld, double* matrixNew, int size)
 	matrixNew[size * i + size - 1] = matrixOld[size * i + size - 1];
 	matrixNew[size * (size - 1) + i] = matrixOld[size * (size - 1) + i];
 }
-__global__ void calc(double* matrixOld, double* matrixNew, int size) 
+__global__ void calc(double* matrixOld, double* matrixNew, int n) 
 {
     size_t i = blockIdx.x;
 	size_t j = threadIdx.x;
@@ -34,7 +34,7 @@ __global__ void calc(double* matrixOld, double* matrixNew, int size)
 					matrixOld[(i + 1) * size + j] +
 					matrixOld[i * size + j + 1]);
 }
-__global__ void findError((double* matrixOld, double* matrixNew, double* matrixTmp)
+__global__ void findError((double* matrixOld, double* matrixNew, double* matrixTmp, size_t n)
 {
 	if((i > 0 && i < n-1) && (j > 0 && j < n-1))
 	{
@@ -88,10 +88,7 @@ int main(int argc, char** argv)
     cub::DeviceReduce::Max(store, tempsize, matrixTmpD, max_error, totalSize);
 	cudaMalloc(&store, tempsize);
 	
-	cudaStream_t stream;
-    cudaStreamCreate(&stream);
-    cudaGraph_t graph;
-    cudaGraphExec_t instance;
+
 
 	const double fraction = 10.0 / (size - 1);
 	double errorNow = 1.0;
@@ -102,24 +99,24 @@ int main(int argc, char** argv)
 	
 	clock_t begin = clock();
 	 fill<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, size);
-	cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal);
-	for(int i = 0; i<500;i+=2)
-    {
-        calc<<<gridSize, blockSize, 0, stream>>>(matrixNewD, matrixOldD, size);
-        calc<<<gridSize, blockSize, 0, stream>>>(matrixOldD, matrixNewD, size);
-    }
-    cudaStreamEndCapture(stream, &graph);
-    cudaGraphInstantiate(&instance, graph, NULL, NULL, 0);
-	while (errorNow > maxError && iterNow < maxIteration)
-	{        
-        iterNow+=500;
-        cudaGraphLaunch(instance, stream);
-        findError<<<GRID_SIZE, BLOCK_SIZE, 0, stream>>>(vec_d, new_vec_d, tmp_d, n);
-	    cub::DeviceReduce::Max(store, bytes, tmp_d, max_errorx, n*n);
+
+while (errorNow > maxError && iterNow < maxIteration)
+{
+calc<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, size);
+		
+		if (iterNow % 100 == 0){	
+			findError<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, matrixTmpD, size);
+	 		
+			 cub::DeviceReduce::Max(store, tempsize, matrixTmpD, max_error, totalSize);
         cudaMemcpy(&errorNow, max_error, sizeof(double), cudaMemcpyDeviceToHost);
+		}
 
-    }
+		double* t = matrixOldD;
+		matrixOldD = matrixNewD;
+		matrixNewD = c;
 
+		iterNow++;
+}
 	clock_t end = clock();
 	  cudaDeviceSynchronize();
 	free(matrixOld);
