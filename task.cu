@@ -78,8 +78,8 @@ int main(int argc, char** argv)
 	 int blockS, minGridSize = 128;
 	 int maxSize = size;
 	 cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockS, calc, 0, totalSize);
-	 dim3 blockSize(32, 1);
-	 dim3 gridSize((size + 31) / 32, 1);
+	 dim3 blockSize(32, 32);
+	 dim3 gridSize((size + 31) / 32, (size + 31) / 32);
 
 
     double* max_error, *store=0;
