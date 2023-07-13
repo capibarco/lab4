@@ -6,22 +6,7 @@
 #include <time.h>
 #include <cuda_runtime.h>
 #include <cub/cub.cuh>
-__global__ void fill(double* matrixOld, double* matrixNew, int size)
-{
-	size_t i = blockIdx.x * blockDim.x + threadIdx.x;
 
-	double fraction = 10.0 / (size - 1);
-
-	matrixOld[i] = 10 + i * fraction;
-	matrixOld[i * size] = 10 + i * fraction;
-	matrixOld[size * i + size - 1] = 20 + i * fraction;
-	matrixOld[size * (size - 1) + i] = 20 + i * fraction;
-
-	matrixNew[i] = matrixOld[i];
-	matrixNew[i * size] = matrixOld[i * size];
-	matrixNew[size * i + size - 1] = matrixOld[size * i + size - 1];
-	matrixNew[size * (size - 1) + i] = matrixOld[size * (size - 1) + i];
-}
 __global__ void calc(double* matrixOld, double* matrixNew, int n)
 {
     size_t i = blockIdx.x;
@@ -62,10 +47,24 @@ int main(int argc, char** argv)
 	double* matrixOld = (double*)calloc(totalSize, sizeof(double));
 	double* matrixNew = (double*)calloc(totalSize, sizeof(double));
 	double* matrixTmp = (double*)calloc(totalSize, sizeof(double));
+const double fraction = 10.0 / (size - 1);
+for (int i = 0; i < size; i++)
+	{
+		matrixOld[i] = cornerUL + i * fraction;
+		matrixOld[i * size] = cornerUL + i * fraction;
+		matrixOld[size * i + size - 1] = cornerUR + i * fraction;
+		matrixOld[size * (size - 1) + i] = cornerUR + i * fraction;
+
+		matrixNew[i] = matrixOld[i];
+		matrixNew[i * size] = matrixOld[i * size];
+		matrixNew[size * i + size - 1] = matrixOld[size * i + size - 1];
+		matrixNew[size * (size - 1) + i] = matrixOld[size * (size - 1) + i];
+	}
 
     double* matrixOldD;
     double* matrixNewD;
     double* matrixTmpD;
+
 	cudaMalloc((void **)&matrixOldD, sizeof(double)*totalSize);
     cudaMalloc((void **)&matrixNewD, sizeof(double)*totalSize);
     cudaMalloc((void **)&matrixTmpD, sizeof(double)*totalSize);
@@ -75,9 +74,6 @@ int main(int argc, char** argv)
     cudaMemcpy(matrixTmpD, matrixTmp, sizeof(double), cudaMemcpyHostToDevice);
 
 
-	 int blockS, minGridSize = 128;
-	 int maxSize = size;
-	 cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockS, calc, 0, totalSize);
 	  int blockSize =32;
 	 int gridSize = (size + 31) / 32;
 
@@ -91,7 +87,7 @@ int main(int argc, char** argv)
 
 
 
-	const double fraction = 10.0 / (size - 1);
+	
 	double errorNow = 1.0;
 	int iterNow = 0;
 
@@ -99,8 +95,6 @@ int main(int argc, char** argv)
 	const double minus = -1;
 
 	clock_t begin = clock();
-	 fill<<<gridSize, blockSize>>>(matrixOldD, matrixNewD, size);
-cudaMemcpy(matrixOldD, matrixOld, sizeof(double), cudaMemcpyDeviceToHost);
 if (toPrint)
 	{
 		#pragma acc kernels loop seq
